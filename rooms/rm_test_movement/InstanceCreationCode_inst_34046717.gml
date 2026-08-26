@@ -1,0 +1,1 @@
+weapon_type = WeaponType.MELEE_KNIFE;
