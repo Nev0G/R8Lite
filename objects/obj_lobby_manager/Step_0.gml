@@ -107,56 +107,56 @@ while (steam_net_packet_receive())
             break;
 			
 			case PKT_SHOOT:
-    var _px = buffer_read(_buf, buffer_f32);
-    var _py = buffer_read(_buf, buffer_f32);
-    var _aim = buffer_read(_buf, buffer_f32);
-    var _weapon = buffer_read(_buf, buffer_s8);
+            var _px = buffer_read(_buf, buffer_f32);
+            var _py = buffer_read(_buf, buffer_f32);
+            var _aim = buffer_read(_buf, buffer_f32);
+            var _weapon = buffer_read(_buf, buffer_s8);
 
-    with (obj_player)
-    {
-        if (!is_local_player)
-        {
-            // On met à jour la cible d'extrapolation plutôt que de téléporter
-            net_pos_x = _px;
-            net_pos_y = _py;
-            aim_direction = _aim;
-            
-            var _cfg = weapon_get_config(_weapon);
-            if (_cfg != undefined)
+            with (obj_player)
             {
-                var _torse_offset_y = -16;
-                var _barrel_dist = _cfg.barrel_length;
-                var _spawn_x = x + lengthdir_x(_barrel_dist, aim_direction);
-                var _spawn_y = (y + _torse_offset_y) + lengthdir_y(_barrel_dist, aim_direction);
-
-                if (variable_struct_exists(_cfg, "pellet_count"))
+                if (!is_local_player)
                 {
-                    var _spread = _cfg.spread_angle;
-                    var _count = _cfg.pellet_count;
-                    for (var i = 0; i < _count; i++)
+                    x = _px;
+                    y = _py;
+                    aim_direction = _aim;
+                    
+                    var _cfg = weapon_get_config(_weapon);
+                    if (_cfg != undefined)
                     {
-                        var _angle_offset = random_range(-_spread * 0.5, _spread * 0.5);
-                        var _bullet = instance_create_layer(_spawn_x, _spawn_y, "Instances", _cfg.bullet_object);
-                        _bullet.damage = 0;
-                        _bullet.move_speed = _cfg.bullet_speed;
-                        _bullet.direction_travel = aim_direction + _angle_offset;
-                        _bullet.owner = id;
+                        var _facing_right = (_aim > 270 || _aim < 90);
+                        var _hand_x = x + (weapon_sprite_offset_x * (_facing_right ? 1 : -1));
+                        var _hand_y = y + weapon_sprite_offset_y;
+                        var _barrel_dist = variable_struct_exists(_cfg, "barrel_length") ? _cfg.barrel_length : 20;
+
+                        var _spawn_x = _hand_x + lengthdir_x(_barrel_dist, _aim);
+                        var _spawn_y = _hand_y + lengthdir_y(_barrel_dist, _aim);
+
+                        if (variable_struct_exists(_cfg, "pellet_count"))
+                        {
+                            var _spread = _cfg.spread_angle;
+                            for (var i = 0; i < _cfg.pellet_count; i++)
+                            {
+                                var _ang = _aim + random_range(-_spread * 0.5, _spread * 0.5);
+                                var _bullet = instance_create_layer(_spawn_x, _spawn_y, "Instances", _cfg.bullet_object);
+                                _bullet.damage = 0;
+                                _bullet.move_speed = _cfg.bullet_speed;
+                                _bullet.direction_travel = _ang;
+                                _bullet.owner = id;
+                            }
+                        }
+                        else
+                        {
+                            var _bullet = instance_create_layer(_spawn_x, _spawn_y, "Instances", _cfg.bullet_object);
+                            _bullet.damage = 0;
+                            _bullet.move_speed = _cfg.bullet_speed;
+                            _bullet.direction_travel = _aim;
+                            _bullet.owner = id;
+                            if (variable_struct_exists(_cfg, "max_bounces")) _bullet.bounces_max = _cfg.max_bounces;
+                        }
                     }
                 }
-                else
-                {
-                    var _bullet = instance_create_layer(_spawn_x, _spawn_y, "Instances", _cfg.bullet_object);
-                    _bullet.damage = 0;
-                    _bullet.move_speed = _cfg.bullet_speed;
-                    _bullet.direction_travel = aim_direction;
-                    _bullet.owner = id;
-
-                    if (variable_struct_exists(_cfg, "max_bounces")) _bullet.bounces_max = _cfg.max_bounces;
-                }
             }
-        }
-    }
-    break;
+            break;
 			
 			case PKT_WEAPON_THROW:
             var _px = buffer_read(_buf, buffer_f32);

@@ -1,178 +1,227 @@
-/// @desc Bloc 0 : Vérification de l'état de vie
+/// @desc Bloc 0 : Vérification de vie
 if (is_dead)
 {
     if (is_local_player) network_send_state();
-    exit; // stoppe tout le reste : pas de mouvement, pas de tir, pas de visée
+    exit;
 }
 
 if (is_local_player)
 {
-    /// @desc Bloc 1 : Acquisition des inputs (LOCAL uniquement)
+    /// @desc Bloc 1 : Acquisition des inputs
     key_left = keyboard_check(vk_left) || keyboard_check(ord("Q"));
     key_right = keyboard_check(vk_right) || keyboard_check(ord("D"));
+    key_down = keyboard_check(vk_down) || keyboard_check(ord("S"));
     key_jump_pressed = keyboard_check_pressed(vk_space);
     key_slide = keyboard_check(vk_control) || keyboard_check(ord("C"));
+    key_dash = keyboard_check_pressed(vk_shift);
+
     if (key_jump_pressed) key_jump = true;
 
-    /// @desc Bloc 2 : Logique physique PURE
+    /// @desc Bloc 2 : Mouvements & Capacités physiques
 
-    // --- Buffers de précision (coyote time / jump buffer) ---
-    if (is_grounded) {
-        coyote_time_current = coyote_time_max;
-    } else if (coyote_time_current > 0) {
-        coyote_time_current--;
-    }
+    // --- Gestion du Dash ---
+    if (dash_cooldown > 0) dash_cooldown--;
 
-    if (key_jump) {
-        jump_buffer_current = jump_buffer_max;
-    } else if (jump_buffer_current > 0) {
-        jump_buffer_current--;
-    }
-
-    // --- Bloc Slide : déclenchement, maintien, et fin ---
-    if (slide_cooldown_current > 0) slide_cooldown_current--;
-
-    if (!is_sliding && key_slide && is_grounded && abs(hspeed_current) >= slide_speed_min && slide_cooldown_current <= 0)
+    if (key_dash && dash_cooldown <= 0 && dash_timer <= 0)
     {
-        is_sliding = true;
-        slide_duration_current = slide_duration_max;
-        hspeed_current *= slide_speed_boost;
+        var _dx = (key_right - key_left);
+        var _dy = (key_down - (keyboard_check(vk_up) || keyboard_check(ord("Z"))));
+
+        if (_dx == 0 && _dy == 0) _dx = (aim_direction > 270 || aim_direction < 90) ? 1 : -1;
+
+        var _d_len = point_distance(0, 0, _dx, _dy);
+        dash_dir_x = (_dx / _d_len) * dash_speed;
+        dash_dir_y = (_dy / _d_len) * dash_speed;
+
+        dash_timer = dash_duration;
+        dash_cooldown = dash_cooldown_max;
+        is_ground_pounding = false;
     }
 
-    if (is_sliding)
+    if (dash_timer > 0)
     {
-        slide_duration_current--;
-
-        if (!key_slide || !is_grounded || slide_duration_current <= 0 || abs(hspeed_current) < slide_speed_min)
-        {
-            is_sliding = false;
-            slide_cooldown_current = slide_cooldown_max;
+        dash_timer--;
+        hspeed_current = dash_dir_x;
+        vspeed_current = dash_dir_y;
+    }
+    else
+    {
+        // --- Coyote Time & Jump Buffer ---
+        if (is_grounded) {
+            coyote_time_current = coyote_time_max;
+            is_ground_pounding = false;
+        } else if (coyote_time_current > 0) {
+            coyote_time_current--;
         }
-    }
 
-    // --- Mouvement horizontal ---
-    var _input_dir = 0;
-    if (key_left)  _input_dir -= 1;
-    if (key_right) _input_dir += 1;
+        if (key_jump) {
+            jump_buffer_current = jump_buffer_max;
+        } else if (jump_buffer_current > 0) {
+            jump_buffer_current--;
+        }
 
-    if (wall_jump_lock_timer <= 0)
-    {
-        var _current_accel = is_grounded ? accel : accel_air;
-        var _current_friction = is_sliding ? slide_friction : (is_grounded ? friction_ground : friction_air);
-
-        if (_input_dir != 0 && !is_sliding)
+        // --- Ground Pound (Pilonnage vertical) ---
+        if (!is_grounded && key_down && !is_wall_sliding && !is_ground_pounding)
         {
-            var _target_speed = hspeed_current + _input_dir * _current_accel;
+            is_ground_pounding = true;
+            vspeed_current = ground_pound_speed;
+            hspeed_current *= 0.2;
+        }
 
-            if (abs(hspeed_current) > move_speed_max)
+        // --- Glissade (Slide) & Super-Slide à l'atterrissage ---
+        if (slide_cooldown_current > 0) slide_cooldown_current--;
+
+        if (!is_sliding && key_slide && is_grounded && abs(hspeed_current) >= slide_speed_min && slide_cooldown_current <= 0)
+        {
+            is_sliding = true;
+            slide_duration_current = slide_duration_max;
+            hspeed_current *= slide_speed_boost;
+        }
+
+        if (is_sliding)
+        {
+            slide_duration_current--;
+            if (!key_slide || !is_grounded || slide_duration_current <= 0 || abs(hspeed_current) < slide_speed_min)
             {
-                hspeed_current = _target_speed;
+                is_sliding = false;
+                slide_cooldown_current = slide_cooldown_max;
+            }
+        }
+
+        // --- Mouvement horizontal standard ---
+        var _input_dir = 0;
+        if (key_left)  _input_dir -= 1;
+        if (key_right) _input_dir += 1;
+
+        if (wall_jump_lock_timer <= 0)
+        {
+            var _current_accel = is_grounded ? accel : accel_air;
+            var _current_friction = is_sliding ? slide_friction : (is_grounded ? friction_ground : friction_air);
+
+            if (_input_dir != 0 && !is_sliding)
+            {
+                var _target_speed = hspeed_current + _input_dir * _current_accel;
+                if (abs(hspeed_current) > move_speed_max) hspeed_current = _target_speed;
+                else hspeed_current = clamp(_target_speed, -move_speed_max, move_speed_max);
             }
             else
             {
-                hspeed_current = clamp(_target_speed, -move_speed_max, move_speed_max);
+                if (hspeed_current > 0) hspeed_current = max(0, hspeed_current - _current_friction);
+                else if (hspeed_current < 0) hspeed_current = min(0, hspeed_current + _current_friction);
             }
         }
         else
         {
-            if (hspeed_current > 0) hspeed_current = max(0, hspeed_current - _current_friction);
-            else if (hspeed_current < 0) hspeed_current = min(0, hspeed_current + _current_friction);
+            wall_jump_lock_timer--;
         }
-    }
-    else
-    {
-        wall_jump_lock_timer--;
+
+        // --- Détection murs & Gravité ---
+        is_touching_wall_left  = place_meeting(x - 1, y, obj_wall);
+        is_touching_wall_right = place_meeting(x + 1, y, obj_wall);
+
+        is_wall_sliding = false;
+        if (!is_grounded && vspeed_current > 0 && (is_touching_wall_left || is_touching_wall_right) && !is_ground_pounding)
+        {
+            is_wall_sliding = true;
+            vspeed_current = min(vspeed_current, wall_slide_speed_max);
+        }
+
+        if (!is_grounded)
+        {
+            if (is_ground_pounding) vspeed_current = ground_pound_speed;
+            else vspeed_current = min(vspeed_current + gravity_force, gravity_max);
+        }
+        else
+        {
+            vspeed_current = 0;
+        }
+
+        // --- Sauts ---
+        if (jump_buffer_current > 0 && is_sliding)
+        {
+            hspeed_current *= slide_jump_cancel_boost;
+            is_sliding = false;
+            slide_cooldown_current = slide_cooldown_max;
+            vspeed_current = jump_force;
+            jump_buffer_current = 0;
+            coyote_time_current = 0;
+            is_grounded = false;
+        }
+        else if (jump_buffer_current > 0 && coyote_time_current > 0 && !is_wall_sliding)
+        {
+            vspeed_current = jump_force;
+            jump_buffer_current = 0;
+            coyote_time_current = 0;
+            is_grounded = false;
+        }
+        else if (jump_buffer_current > 0 && is_wall_sliding)
+        {
+            vspeed_current = wall_jump_force_y;
+            hspeed_current = is_touching_wall_left ? wall_jump_force_x : -wall_jump_force_x;
+            wall_jump_lock_timer = wall_jump_lock_duration;
+            jump_buffer_current = 0;
+        }
+
+        key_jump = false;
     }
 
-    // --- Détection des murs (avant d'appliquer la gravité) ---
-    is_touching_wall_left  = place_meeting(x - 1, y, obj_wall);
-    is_touching_wall_right = place_meeting(x + 1, y, obj_wall);
-
-    // --- Wall slide ---
-    is_wall_sliding = false;
-    if (!is_grounded && vspeed_current > 0 && (is_touching_wall_left || is_touching_wall_right)) {
-        is_wall_sliding = true;
-        vspeed_current = min(vspeed_current, wall_slide_speed_max);
-    }
-
-    // --- Gravité ---
-    if (!is_grounded) {
-        vspeed_current += gravity_force;
-        vspeed_current = min(vspeed_current, gravity_max);
-    } else {
-        vspeed_current = 0;
-    }
-
-    // --- Slide-jump cancel / Saut normal / Wall jump ---
-    if (jump_buffer_current > 0 && is_sliding)
-    {
-        hspeed_current *= slide_jump_cancel_boost;
-        is_sliding = false;
-        slide_cooldown_current = slide_cooldown_max;
-        vspeed_current = jump_force;
-        jump_buffer_current = 0;
-        coyote_time_current = 0;
-        is_grounded = false;
-    }
-    else if (jump_buffer_current > 0 && coyote_time_current > 0 && !is_wall_sliding)
-    {
-        vspeed_current = jump_force;
-        jump_buffer_current = 0;
-        coyote_time_current = 0;
-        is_grounded = false;
-    }
-    else if (jump_buffer_current > 0 && is_wall_sliding)
-    {
-        vspeed_current = wall_jump_force_y;
-        hspeed_current = is_touching_wall_left ? wall_jump_force_x : -wall_jump_force_x;
-        wall_jump_lock_timer = wall_jump_lock_duration;
-        jump_buffer_current = 0;
-    }
-
-    key_jump = false;
-
-    // --- Plafond de vitesse absolu ---
-    absolute_speed_cap = 18;
+    // --- Plafond absolu & Collisions ---
     hspeed_current = clamp(hspeed_current, -absolute_speed_cap, absolute_speed_cap);
 
-    // --- Application des mouvements avec collisions ---
-    if (place_meeting(x + hspeed_current, y, obj_wall)) {
-        while (!place_meeting(x + sign(hspeed_current), y, obj_wall)) {
-            x += sign(hspeed_current);
-        }
+    if (place_meeting(x + hspeed_current, y, obj_wall))
+    {
+        while (!place_meeting(x + sign(hspeed_current), y, obj_wall)) x += sign(hspeed_current);
         hspeed_current = 0;
     }
     x += hspeed_current;
 
-    if (place_meeting(x, y + vspeed_current, obj_wall)) {
-        while (!place_meeting(x, y + sign(vspeed_current), obj_wall)) {
-            y += sign(vspeed_current);
-        }
+    var _was_in_air = !is_grounded;
+    if (place_meeting(x, y + vspeed_current, obj_wall))
+    {
+        while (!place_meeting(x, y + sign(vspeed_current), obj_wall)) y += sign(vspeed_current);
         vspeed_current = 0;
     }
     y += vspeed_current;
 
     is_grounded = place_meeting(x, y + 1, obj_wall);
 
-    /// @desc Bloc 3 : Visée vers la souris
-    aim_direction = point_direction(x, y, mouse_x, mouse_y);
+    // Déclenchement du Super-Slide si on atterrit d'un Ground Pound avec la touche slide
+    if (_was_in_air && is_grounded && is_ground_pounding)
+    {
+        is_ground_pounding = false;
+        if (key_slide)
+        {
+            is_sliding = true;
+            slide_duration_current = slide_duration_max;
+            hspeed_current = (aim_direction > 270 || aim_direction < 90 ? 1 : -1) * 14.0;
+        }
+    }
 
-    /// @desc Bloc 4 : Ramassage automatique d'arme
+   /// @desc Bloc 3 : Visée vers la souris depuis la main
+    // Détermine si on regarde à droite ou à gauche en fonction de la souris
+    var _facing_right = (mouse_x >= x);
+    
+    // Position exacte de l'épaule/main
+    var _hand_x = x + (weapon_sprite_offset_x * (_facing_right ? 1 : -1));
+    var _hand_y = y + weapon_sprite_offset_y;
+
+    // L'angle de visée part directement de la main
+    aim_direction = point_direction(_hand_x, _hand_y, mouse_x, mouse_y);
+
+    /// @desc Bloc 4 : Ramassage automatique
     if (current_weapon_type == -1)
-	{
-	    var _nearby_weapon = instance_place(x, y, obj_weapon_pickup);
-	    if (_nearby_weapon != noone 
-	        && point_distance(x, y, _nearby_weapon.x, _nearby_weapon.y) <= aim_range_pickup
-	        && current_time >= _nearby_weapon.pickup_locked_until) // ← AJOUTÉ
-	    {
+    {
+        var _nearby_weapon = instance_place(x, y, obj_weapon_pickup);
+        if (_nearby_weapon != noone && point_distance(x, y, _nearby_weapon.x, _nearby_weapon.y) <= aim_range_pickup && current_time >= _nearby_weapon.pickup_locked_until)
+        {
             var _pickup_x = _nearby_weapon.x;
             var _pickup_y = _nearby_weapon.y;
 
             current_weapon_type = _nearby_weapon.weapon_type;
             current_weapon_config = weapon_get_config(current_weapon_type);
 
-            // --- Récupération des munitions AVANT de détruire l'arme ---
-            if (!current_weapon_config.is_melee) {
+            if (!current_weapon_config.is_melee)
+            {
                 if (_nearby_weapon.ammo_current != -1) {
                     ammo_current = _nearby_weapon.ammo_current;
                     reserve_ammo_current = _nearby_weapon.reserve_ammo_current;
@@ -184,6 +233,7 @@ if (is_local_player)
 
             is_reloading = false;
             reload_timer_current = 0;
+            active_reload_boost = false;
 
             instance_destroy(_nearby_weapon);
 
@@ -199,7 +249,7 @@ if (is_local_player)
         }
     }
 
-    /// @desc Bloc 5 : Tir et Rechargement
+    /// @desc Bloc 5 : Combat (Tir, Parade, Rechargement actif)
     if (fire_cooldown_current > 0) fire_cooldown_current--;
 
     if (current_weapon_type != -1)
@@ -208,119 +258,187 @@ if (is_local_player)
         var _is_melee = _cfg.is_melee;
         var _reload_pressed = keyboard_check_pressed(ord("R"));
 
-        // --- 5a. Logique de Rechargement ---
+        // --- 5a. Rechargement actif ---
         if (!_is_melee)
         {
             if (is_reloading)
             {
                 reload_timer_current--;
-                if (reload_timer_current <= 0)
+
+                // Timing parfait pour le rechargement actif (zone entre 40% et 60% du temps)
+                var _prog = 1.0 - (reload_timer_current / reload_timer_start);
+                if (_reload_pressed && _prog >= 0.40 && _prog <= 0.65)
+                {
+                    // Réussite : rechargement instantané + bonus de dégâts
+                    is_reloading = false;
+                    reload_timer_current = 0;
+                    active_reload_boost = true;
+
+                    var _needed = _cfg.mag_size - ammo_current;
+                    var _load = min(_needed, reserve_ammo_current);
+                    ammo_current += _load;
+                    reserve_ammo_current -= _load;
+                }
+                else if (reload_timer_current <= 0)
                 {
                     is_reloading = false;
-
-                    var _bullets_needed = _cfg.mag_size - ammo_current;
-                    var _bullets_to_load = min(_bullets_needed, reserve_ammo_current);
-
-                    ammo_current += _bullets_to_load;
-                    reserve_ammo_current -= _bullets_to_load;
+                    var _needed = _cfg.mag_size - ammo_current;
+                    var _load = min(_needed, reserve_ammo_current);
+                    ammo_current += _load;
+                    reserve_ammo_current -= _load;
                 }
             }
             else if (((_reload_pressed && ammo_current < _cfg.mag_size) || (mouse_check_button(mb_left) && ammo_current <= 0)) && reserve_ammo_current > 0)
             {
                 is_reloading = true;
                 reload_timer_current = _cfg.reload_time;
+                reload_timer_start = _cfg.reload_time;
+                active_reload_boost = false;
             }
         }
 
-        // --- 5b. Logique de Tir / Mêlée ---
-var _fire_pressed = mouse_check_button(mb_left);
+        // --- 5b. Tir / Mêlée avec Parade & Recul ---
+        var _fire_pressed = mouse_check_button(mb_left);
 
-if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee || ammo_current > 0))
-{
-    if (_is_melee)
-    {
-        var _hit_target = noone;
-        var _center_y_offset = weapon_sprite_offset_y; // Centre de frappe au torse
-        var _attacker_x = x;
-        var _attacker_y = y + _center_y_offset;
-        var _attacker_aim = aim_direction;
-
-        with (obj_player)
+        if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee || ammo_current > 0))
         {
-            if (!is_local_player && !is_dead)
+            if (_is_melee)
             {
-                var _target_center_y = y + other.weapon_sprite_offset_y;
-                var _dist = point_distance(_attacker_x, _attacker_y, x, _target_center_y);
-                var _ang_diff = abs(angle_difference(point_direction(_attacker_x, _attacker_y, x, _target_center_y), _attacker_aim));
-                
-                if (_dist <= _cfg.melee_range && _ang_diff <= _cfg.melee_angle * 0.5)
+                var _hit_target = noone;
+                var _attacker_x = x;
+                var _attacker_y = y + weapon_sprite_offset_y;
+                var _attacker_aim = aim_direction;
+
+                // 1. Dégâts et désarmement au corps-à-corps
+                with (obj_player)
                 {
-                    _hit_target = id;
+                    if (!is_local_player && !is_dead)
+                    {
+                        var _target_center_y = y + other.weapon_sprite_offset_y;
+                        var _dist = point_distance(_attacker_x, _attacker_y, x, _target_center_y);
+                        var _ang_diff = abs(angle_difference(point_direction(_attacker_x, _attacker_y, x, _target_center_y), _attacker_aim));
+                        
+                        if (_dist <= _cfg.melee_range && _ang_diff <= _cfg.melee_angle * 0.5)
+                        {
+                            _hit_target = id;
+                        }
+                    }
+                }
+
+                if (_hit_target != noone)
+                {
+                    _hit_target.hp_current -= _cfg.damage;
+                    network_send_hit(_cfg.damage);
+
+                    // Désarmement de la cible si elle tient une arme
+                    if (_hit_target.current_weapon_type != -1)
+                    {
+                        var _drop = instance_create_layer(_hit_target.x, _hit_target.y, "Instances", obj_weapon_pickup);
+                        _drop.weapon_type = _hit_target.current_weapon_type;
+                        _drop.ammo_current = _hit_target.ammo_current;
+                        _drop.reserve_ammo_current = _hit_target.reserve_ammo_current;
+                        _drop.pickup_locked_until = current_time + 800;
+
+                        _hit_target.current_weapon_type = -1;
+                        _hit_target.current_weapon_config = undefined;
+                    }
+
+                    if (_hit_target.hp_current <= 0)
+                    {
+                        _hit_target.hp_current = 0;
+                        _hit_target.is_dead = true;
+                        if (global.is_host) with (obj_round_manager) { player_died(_hit_target, other.id); }
+                        else network_send_player_died(global.opponent_steam_id);
+                    }
+                }
+
+                // 2. Parade au couteau (Renvoi des balles et armes lancées)
+                with (obj_bullet_straight)
+                {
+                    if (owner != other.id)
+                    {
+                        var _b_dist = point_distance(_attacker_x, _attacker_y, x, y);
+                        var _b_ang = abs(angle_difference(point_direction(_attacker_x, _attacker_y, x, y), _attacker_aim));
+                        if (_b_dist <= _cfg.melee_range + 16 && _b_ang <= _cfg.melee_angle * 0.5)
+                        {
+                            owner = other.id;
+                            direction_travel = _attacker_aim;
+                            damage *= 1.5;
+                        }
+                    }
+                }
+
+                with (obj_weapon_thrown)
+                {
+                    if (owner != other.id)
+                    {
+                        var _w_dist = point_distance(_attacker_x, _attacker_y, x, y);
+                        var _w_ang = abs(angle_difference(point_direction(_attacker_x, _attacker_y, x, y), _attacker_aim));
+                        if (_w_dist <= _cfg.melee_range + 16 && _w_ang <= _cfg.melee_angle * 0.5)
+                        {
+                            owner = other.id;
+                            hspeed_current = lengthdir_x(12, _attacker_aim);
+                            vspeed_current = lengthdir_y(12, _attacker_aim);
+                        }
+                    }
+                }
+
+                melee_swing_timer = melee_swing_duration;
+                fire_cooldown_current = _cfg.fire_rate;
+
+                if (global.opponent_steam_id != -1)
+                {
+                    var _buf_melee = buffer_create(13, buffer_fixed, 1);
+                    buffer_write(_buf_melee, buffer_u8, PKT_MELEE);
+                    buffer_write(_buf_melee, buffer_f32, x);
+                    buffer_write(_buf_melee, buffer_f32, y);
+                    buffer_write(_buf_melee, buffer_f32, aim_direction);
+                    steam_net_packet_send(global.opponent_steam_id, _buf_melee, -1);
+                    buffer_delete(_buf_melee);
                 }
             }
-        }
-
-        if (_hit_target != noone)
-        {
-            _hit_target.hp_current -= _cfg.damage;
-            network_send_hit(_cfg.damage);
-
-            if (_hit_target.hp_current <= 0)
-            {
-                _hit_target.hp_current = 0;
-                _hit_target.is_dead = true;
-                if (global.is_host) with (obj_round_manager) { player_died(_hit_target, other.id); }
-                else network_send_player_died(global.opponent_steam_id);
-            }
-        }
-
-        melee_swing_timer = melee_swing_duration;
-        fire_cooldown_current = _cfg.fire_rate;
-
-        if (global.opponent_steam_id != -1)
-        {
-            var _buf_melee = buffer_create(13, buffer_fixed, 1);
-            buffer_write(_buf_melee, buffer_u8, PKT_MELEE);
-            buffer_write(_buf_melee, buffer_f32, x);
-            buffer_write(_buf_melee, buffer_f32, y);
-            buffer_write(_buf_melee, buffer_f32, aim_direction);
-            steam_net_packet_send(global.opponent_steam_id, _buf_melee, -1);
-            buffer_delete(_buf_melee);
-        }
-    }
-    else
+            else
     {
         ammo_current--;
 
-        var _torse_offset_y = -50;
-        var _barrel_dist = _cfg.barrel_length;
+        var _facing_right = (mouse_x >= x);
+        var _hand_x = x + (weapon_sprite_offset_x * (_facing_right ? 1 : -1));
+        var _hand_y = y + weapon_sprite_offset_y;
 
-        var _spawn_x = x + lengthdir_x(_barrel_dist, aim_direction);
-        var _spawn_y = (y + _torse_offset_y) + lengthdir_y(_barrel_dist, aim_direction);
+        // Longueur du canon configurée dans l'arme
+        var _barrel_dist = variable_struct_exists(_cfg, "barrel_length") ? _cfg.barrel_length : 24;
+        
+        // Calcul du bout du canon
+        var _spawn_x = _hand_x + lengthdir_x(_barrel_dist, aim_direction);
+        var _spawn_y = _hand_y + lengthdir_y(_barrel_dist, aim_direction);
 
-        // Lecture du multiplicateur de headshot configuré dans l'arme (2.0 par défaut si non renseigné)
+        // Recoil Jump
+        var _recoil = variable_struct_exists(_cfg, "recoil_force") ? _cfg.recoil_force : 0;
+        hspeed_current -= lengthdir_x(_recoil, aim_direction);
+        vspeed_current -= lengthdir_y(_recoil, aim_direction);
+
+        var _final_dmg = _cfg.damage * (active_reload_boost ? 1.25 : 1.0);
         var _hs_mult = variable_struct_exists(_cfg, "headshot_mult") ? _cfg.headshot_mult : 2.0;
 
         if (variable_struct_exists(_cfg, "pellet_count"))
         {
             var _spread = _cfg.spread_angle;
-            var _count = _cfg.pellet_count;
-            for (var i = 0; i < _count; i++)
+            for (var i = 0; i < _cfg.pellet_count; i++)
             {
-                var _angle_offset = random_range(-_spread * 0.5, _spread * 0.5);
+                var _ang = aim_direction + random_range(-_spread * 0.5, _spread * 0.5);
                 var _bullet = instance_create_layer(_spawn_x, _spawn_y, "Instances", _cfg.bullet_object);
-                _bullet.damage = _cfg.damage;
-                _bullet.headshot_mult = _hs_mult; // <-- Transmission du multiplicateur
+                _bullet.damage = _final_dmg;
+                _bullet.headshot_mult = _hs_mult;
                 _bullet.move_speed = _cfg.bullet_speed;
-                _bullet.direction_travel = aim_direction + _angle_offset;
+                _bullet.direction_travel = _ang;
                 _bullet.owner = id;
             }
         }
         else
         {
             var _bullet = instance_create_layer(_spawn_x, _spawn_y, "Instances", _cfg.bullet_object);
-            _bullet.damage = _cfg.damage;
-            _bullet.headshot_mult = _hs_mult; // <-- Transmission du multiplicateur
+            _bullet.damage = _final_dmg;
+            _bullet.headshot_mult = _hs_mult;
             _bullet.move_speed = _cfg.bullet_speed;
             _bullet.direction_travel = aim_direction;
             _bullet.owner = id;
@@ -328,6 +446,7 @@ if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee |
             if (variable_struct_exists(_cfg, "max_bounces")) _bullet.bounces_max = _cfg.max_bounces;
         }
 
+        active_reload_boost = false;
         fire_cooldown_current = _cfg.fire_rate;
 
         if (global.opponent_steam_id != -1)
@@ -342,33 +461,25 @@ if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee |
             buffer_delete(_buf_shoot);
         }
     }
-}}
+        }
+    }
 
     /// @desc Bloc 6 : Lancer d'arme chargé (style Worms)
     if (current_weapon_type != -1)
     {
-        // 1. Maintien du clic droit : montée de la jauge
         if (mouse_check_button(mb_right))
         {
             throw_charge = min(throw_charge + 1, throw_charge_max);
         }
 
-        // 2. Relâchement du clic droit : calcul et lancer
         if (mouse_check_button_released(mb_right) && throw_charge > 0)
         {
-            // --- TES LIGNES ICI ---
             var _charge_ratio = throw_charge / throw_charge_max;
             var _speed = lerp(throw_speed_min, throw_speed_max, _charge_ratio);
-
-            // Boost de vitesse pour les armes de mêlée (vol plus rapide)
-            if (current_weapon_config.is_melee)
-            {
-                _speed *= 1.25; 
-            }
+            if (current_weapon_config.is_melee) _speed *= 1.25;
 
             var _hx = lengthdir_x(_speed, aim_direction);
             var _vy = lengthdir_y(_speed, aim_direction);
-            // ----------------------
 
             var _thrown = instance_create_layer(x, y + weapon_sprite_offset_y, "Instances", obj_weapon_thrown);
             _thrown.weapon_type = current_weapon_type;
@@ -379,17 +490,9 @@ if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee |
             _thrown.reserve_ammo_current = reserve_ammo_current;
             _thrown.owner = id;
 
-            // Dégâts selon l'arme et la force de charge
-            if (current_weapon_config.is_melee)
-            {
-                _thrown.throw_damage = round(lerp(35, current_weapon_config.damage * 1.25, _charge_ratio));
-            }
-            else
-            {
-                _thrown.throw_damage = round(lerp(15, 35, _charge_ratio));
-            }
+            if (current_weapon_config.is_melee) _thrown.throw_damage = round(lerp(35, current_weapon_config.damage * 1.25, _charge_ratio));
+            else _thrown.throw_damage = round(lerp(15, 35, _charge_ratio));
 
-            // Envoi sur le réseau
             if (global.opponent_steam_id != -1)
             {
                 var _buf = buffer_create(22, buffer_fixed, 1);
@@ -405,7 +508,6 @@ if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee |
                 buffer_delete(_buf);
             }
 
-            // Réinitialisation de l'état
             current_weapon_type = -1;
             current_weapon_config = undefined;
             ammo_current = 0;
@@ -417,41 +519,28 @@ if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee |
     {
         throw_charge = 0;
     }
-	
-	/// FIN BLOC 6 
 
     network_send_state();
 }
 else
 {
-    /// @desc Bloc distant : extrapolation + correction douce
     net_pos_x += net_vel_x;
     net_pos_y += net_vel_y;
-
     x = lerp(x, net_pos_x, 0.35);
     y = lerp(y, net_pos_y, 0.35);
 }
 
 if (melee_swing_timer > 0) melee_swing_timer--;
 
-// --- Affichage du slide (aplati visuellement) ---
-if (is_sliding)
-{
-    image_yscale = 0.6;
-}
+// --- Écrasement visuel (Slide & Ground Pound) ---
+if (is_sliding) image_yscale = 0.6;
+else if (is_ground_pounding) image_yscale = 1.3;
 else
 {
     if (image_yscale != 1)
     {
         image_yscale = 1;
-
-        var _max_push = 4;
         var _pushed = 0;
-
-        while (place_meeting(x, y, obj_wall) && _pushed < _max_push)
-        {
-            y -= 1;
-            _pushed++;
-        }
+        while (place_meeting(x, y, obj_wall) && _pushed < 4) { y -= 1; _pushed++; }
     }
 }

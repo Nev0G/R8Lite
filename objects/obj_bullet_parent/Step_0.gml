@@ -1,45 +1,39 @@
-/// @desc Déplacement en ligne droite + durée de vie
+/// @desc Trajectoire et calcul des tirs à la tête
+
 x += lengthdir_x(move_speed, direction_travel);
 y += lengthdir_y(move_speed, direction_travel);
+image_angle = direction_travel;
 
-lifetime_current++;
-if (lifetime_current >= lifetime_max)
-{
-    instance_destroy();
-}
-
-// --- Collision avec un mur ---
+// Collision mur
 if (place_meeting(x, y, obj_wall))
 {
     instance_destroy();
+    exit;
 }
 
-// --- Collision avec un joueur (sauf le tireur) ---
-var _hit_player = instance_place(x, y, obj_player);
+// Collision joueur
 var _hit = instance_place(x, y, obj_player);
-
 if (_hit != noone && _hit != owner && !_hit.is_dead)
 {
-    // C'est le tireur local qui valide le tir
     if (owner != noone && owner.is_local_player)
     {
-        // Détection de la zone touchée
         var _head_threshold = _hit.bbox_top + (_hit.bbox_bottom - _hit.bbox_top) * 0.30;
         var _is_headshot = (y <= _head_threshold);
 
-        // Multiplicateur : x2 si headshot, x1 sinon
-        var _multiplier = _is_headshot ? 2.0 : 1.0;
-        var _final_damage = round(damage * _multiplier);
+        var _mult = _is_headshot ? headshot_mult : 1.0;
+        var _final_damage = round(damage * _mult);
 
         _hit.hp_current -= _final_damage;
+        _hit.flash_timer = 3; // Flash blanc sur la cible
         network_send_hit(_final_damage);
 
-        // Feedback visuel / sonore (optionnel)
-        if (_is_headshot)
-        {
-            // Ex: Jouer un son d'impact métallique plus aigu ou afficher un popup
-            // audio_play_sound(snd_headshot, 10, false);
-        }
+        // Effets de Juice
+        spawn_damage_popup(_hit.x, _hit.bbox_top, _final_damage, _is_headshot);
+        trigger_screenshake(_is_headshot ? 6.0 : 3.0, _is_headshot ? 12 : 6);
+
+        // Feedback au tireur local
+        owner.hitmarker_timer = 8;
+        owner.hitmarker_is_crit = _is_headshot;
 
         if (_hit.hp_current <= 0)
         {
