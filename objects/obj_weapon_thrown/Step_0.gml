@@ -1,3 +1,10 @@
+// Récupération de la gravité spécifique à l'arme
+var _cfg = weapon_get_config(weapon_type);
+if (_cfg != undefined && variable_struct_exists(_cfg, "throw_gravity"))
+{
+    gravity_force = _cfg.throw_gravity;
+}
+
 if (!has_landed)
 {
     // --- Collision avec un joueur (uniquement si l'arme est dangereuse) ---

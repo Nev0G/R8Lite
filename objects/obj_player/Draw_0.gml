@@ -56,3 +56,47 @@ if (melee_swing_timer > 0 && current_weapon_config != undefined && current_weapo
     draw_primitive_end();
     draw_set_alpha(1);
 }
+
+
+// --- Visée et trajectoire prédictive (Style Worms) ---
+if (is_local_player && throw_charge > 0 && current_weapon_type != -1)
+{
+    var _charge_ratio = throw_charge / throw_charge_max;
+    var _sim_speed = lerp(throw_speed_min, throw_speed_max, _charge_ratio);
+    var _sim_vx = lengthdir_x(_sim_speed, aim_direction);
+    var _sim_vy = lengthdir_y(_sim_speed, aim_direction);
+    var _sim_x = x;
+    var _sim_y = y + weapon_sprite_offset_y;
+    var _grav = variable_struct_exists(current_weapon_config, "throw_gravity") ? current_weapon_config.throw_gravity : 0.45; // Gravité standard appliquée à obj_weapon_thrown
+
+    // 1. Dessin des points de trajectoire
+    draw_set_color(c_yellow);
+    draw_set_alpha(0.7);
+    
+    var _steps = 14;
+    for (var i = 1; i <= _steps; i++)
+    {
+        var _t = i * 2.5;
+        var _pt_x = _sim_x + _sim_vx * _t;
+        var _pt_y = _sim_y + _sim_vy * _t + 0.5 * _grav * _t * _t;
+        
+        draw_circle(_pt_x, _pt_y, 2, false);
+    }
+
+    // 2. Petite jauge de puissance au-dessus du joueur
+    var _bar_w = 32;
+    var _bar_h = 4;
+    var _bar_x = x - (_bar_w * 0.5);
+    var _bar_y = bbox_top - 12;
+
+    draw_set_color(c_dkgray);
+    draw_rectangle(_bar_x, _bar_y, _bar_x + _bar_w, _bar_y + _bar_h, false);
+
+    // Couleur dynamique : vert -> jaune -> rouge
+    var _bar_color = merge_color(c_lime, c_red, _charge_ratio);
+    draw_set_color(_bar_color);
+    draw_rectangle(_bar_x, _bar_y, _bar_x + (_bar_w * _charge_ratio), _bar_y + _bar_h, false);
+
+    draw_set_alpha(1);
+    draw_set_color(c_white);
+}

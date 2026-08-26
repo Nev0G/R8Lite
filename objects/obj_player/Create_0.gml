@@ -68,6 +68,12 @@ reload_timer_current = 0;
 melee_swing_timer = 0;
 melee_swing_duration = 10;
 
+// --- Système de jet chargé (style Worms) ---
+throw_charge = 0;
+throw_charge_max = 40;       // ~0,65 seconde pour charger au maximum
+throw_speed_min = 4.0;       // Jet court / lâcher
+throw_speed_max = 16.0;      // Jet puissant tendu
+
 // --- Santé & état de round ---
 hp_max = 100;
 hp_current = hp_max;

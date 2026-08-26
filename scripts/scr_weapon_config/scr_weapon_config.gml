@@ -16,6 +16,7 @@ function weapon_get_config(_type)
             return {
                 name: "Pistol",
                 damage: 34,
+                headshot_mult: 2.0,
                 fire_rate: 20,
                 bullet_speed: 16,
                 bullet_object: obj_bullet_straight,
@@ -25,7 +26,8 @@ function weapon_get_config(_type)
                 mag_size: 12,
                 reload_time: 60,
                 reserve_ammo: 24,
-                barrel_length: 20 // Longueur du canon du pistolet
+                barrel_length: 20,
+                throw_gravity: 0.45 // Gravité normale (effet cloche classique)
             };
 
         case WeaponType.SHOTGUN:
@@ -61,6 +63,7 @@ function weapon_get_config(_type)
                 reserve_ammo: 18,
                 barrel_length: 25
             };
+	
 
 		        case WeaponType.MELEE_KNIFE:
             return {
@@ -70,10 +73,11 @@ function weapon_get_config(_type)
                 bullet_speed: 0,
                 bullet_object: noone,
                 is_melee: true,
-                melee_range: 80, // Portée adaptée aux sprites 64x64
-                melee_angle: 100, // Cône d'attaque plus tolérant
+                melee_range: 56,
+                melee_angle: 100,
                 sprite: spr_weapon_knife,
-                barrel_length: 0
+                barrel_length: 0,
+                throw_gravity: 0.12 // Très faible gravité : vol tendu et droit !
             };
     }
 

@@ -298,6 +298,9 @@ if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee |
         var _spawn_x = x + lengthdir_x(_barrel_dist, aim_direction);
         var _spawn_y = (y + _torse_offset_y) + lengthdir_y(_barrel_dist, aim_direction);
 
+        // Lecture du multiplicateur de headshot configuré dans l'arme (2.0 par défaut si non renseigné)
+        var _hs_mult = variable_struct_exists(_cfg, "headshot_mult") ? _cfg.headshot_mult : 2.0;
+
         if (variable_struct_exists(_cfg, "pellet_count"))
         {
             var _spread = _cfg.spread_angle;
@@ -307,6 +310,7 @@ if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee |
                 var _angle_offset = random_range(-_spread * 0.5, _spread * 0.5);
                 var _bullet = instance_create_layer(_spawn_x, _spawn_y, "Instances", _cfg.bullet_object);
                 _bullet.damage = _cfg.damage;
+                _bullet.headshot_mult = _hs_mult; // <-- Transmission du multiplicateur
                 _bullet.move_speed = _cfg.bullet_speed;
                 _bullet.direction_travel = aim_direction + _angle_offset;
                 _bullet.owner = id;
@@ -316,6 +320,7 @@ if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee |
         {
             var _bullet = instance_create_layer(_spawn_x, _spawn_y, "Instances", _cfg.bullet_object);
             _bullet.damage = _cfg.damage;
+            _bullet.headshot_mult = _hs_mult; // <-- Transmission du multiplicateur
             _bullet.move_speed = _cfg.bullet_speed;
             _bullet.direction_travel = aim_direction;
             _bullet.owner = id;
@@ -339,42 +344,81 @@ if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee |
     }
 }}
 
-    /// @desc Bloc 6 : Lancer de l'arme
-    if (current_weapon_type != -1 && mouse_check_button_pressed(mb_right))
+    /// @desc Bloc 6 : Lancer d'arme chargé (style Worms)
+    if (current_weapon_type != -1)
     {
-        var _hx = lengthdir_x(10, aim_direction);
-        var _vy = lengthdir_y(10, aim_direction) - 3;
-
-        var _thrown = instance_create_layer(x, y, "Instances", obj_weapon_thrown);
-        _thrown.weapon_type = current_weapon_type;
-        _thrown.hspeed_current = _hx;
-        _thrown.vspeed_current = _vy;
-        _thrown.sprite_index = current_weapon_config.sprite;
-
-        _thrown.ammo_current = ammo_current;
-        _thrown.reserve_ammo_current = reserve_ammo_current;
-        _thrown.owner = id;
-
-        if (global.opponent_steam_id != -1)
+        // 1. Maintien du clic droit : montée de la jauge
+        if (mouse_check_button(mb_right))
         {
-            var _buf = buffer_create(22, buffer_fixed, 1);
-            buffer_write(_buf, buffer_u8, PKT_WEAPON_THROW);
-            buffer_write(_buf, buffer_f32, x);
-            buffer_write(_buf, buffer_f32, y);
-            buffer_write(_buf, buffer_f32, _hx);
-            buffer_write(_buf, buffer_f32, _vy);
-            buffer_write(_buf, buffer_s8, current_weapon_type);
-            buffer_write(_buf, buffer_s16, ammo_current);
-            buffer_write(_buf, buffer_s16, reserve_ammo_current);
-            steam_net_packet_send(global.opponent_steam_id, _buf, -1);
-            buffer_delete(_buf);
+            throw_charge = min(throw_charge + 1, throw_charge_max);
         }
 
-        current_weapon_type = -1;
-        current_weapon_config = undefined;
-        ammo_current = 0;
-        reserve_ammo_current = 0;
+        // 2. Relâchement du clic droit : calcul et lancer
+        if (mouse_check_button_released(mb_right) && throw_charge > 0)
+        {
+            // --- TES LIGNES ICI ---
+            var _charge_ratio = throw_charge / throw_charge_max;
+            var _speed = lerp(throw_speed_min, throw_speed_max, _charge_ratio);
+
+            // Boost de vitesse pour les armes de mêlée (vol plus rapide)
+            if (current_weapon_config.is_melee)
+            {
+                _speed *= 1.25; 
+            }
+
+            var _hx = lengthdir_x(_speed, aim_direction);
+            var _vy = lengthdir_y(_speed, aim_direction);
+            // ----------------------
+
+            var _thrown = instance_create_layer(x, y + weapon_sprite_offset_y, "Instances", obj_weapon_thrown);
+            _thrown.weapon_type = current_weapon_type;
+            _thrown.hspeed_current = _hx;
+            _thrown.vspeed_current = _vy;
+            _thrown.sprite_index = current_weapon_config.sprite;
+            _thrown.ammo_current = ammo_current;
+            _thrown.reserve_ammo_current = reserve_ammo_current;
+            _thrown.owner = id;
+
+            // Dégâts selon l'arme et la force de charge
+            if (current_weapon_config.is_melee)
+            {
+                _thrown.throw_damage = round(lerp(35, current_weapon_config.damage * 1.25, _charge_ratio));
+            }
+            else
+            {
+                _thrown.throw_damage = round(lerp(15, 35, _charge_ratio));
+            }
+
+            // Envoi sur le réseau
+            if (global.opponent_steam_id != -1)
+            {
+                var _buf = buffer_create(22, buffer_fixed, 1);
+                buffer_write(_buf, buffer_u8, PKT_WEAPON_THROW);
+                buffer_write(_buf, buffer_f32, x);
+                buffer_write(_buf, buffer_f32, y + weapon_sprite_offset_y);
+                buffer_write(_buf, buffer_f32, _hx);
+                buffer_write(_buf, buffer_f32, _vy);
+                buffer_write(_buf, buffer_s8, current_weapon_type);
+                buffer_write(_buf, buffer_s16, ammo_current);
+                buffer_write(_buf, buffer_s16, reserve_ammo_current);
+                steam_net_packet_send(global.opponent_steam_id, _buf, -1);
+                buffer_delete(_buf);
+            }
+
+            // Réinitialisation de l'état
+            current_weapon_type = -1;
+            current_weapon_config = undefined;
+            ammo_current = 0;
+            reserve_ammo_current = 0;
+            throw_charge = 0;
+        }
     }
+    else
+    {
+        throw_charge = 0;
+    }
+	
+	/// FIN BLOC 6 
 
     network_send_state();
 }

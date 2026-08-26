@@ -9,4 +9,5 @@ ammo_current = 0;
 reserve_ammo_current = 0;
 owner = noone;
 throw_damage = 25; // Dégâts infligés par l'arme
+gravity_force = 0.45; // Valeur par défaut
 can_deal_damage = true; // L'arme est dangereuse quand on vient de la jeter
