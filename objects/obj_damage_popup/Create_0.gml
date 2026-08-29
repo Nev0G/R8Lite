@@ -1,4 +1,4 @@
-/// @desc Initialisation du pop-up
+	/// @desc Initialisation du pop-up
 damage_text = "";
 is_crit = false;
 alpha = 1.0;

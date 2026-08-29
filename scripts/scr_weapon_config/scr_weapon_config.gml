@@ -4,13 +4,25 @@ enum WeaponType {
     PISTOL,
     SHOTGUN,
     BOUNCER,
-    MELEE_KNIFE
+    MELEE_KNIFE,
+	FISTS
 }
 
 function weapon_get_config(_type)
 {
     switch (_type)
     {
+		case -1: // Gère le cas où le joueur est à -1 (mains nues)
+        case WeaponType.FISTS: // Gère le cas via l'énumération
+            return {
+                is_melee: true,
+                melee_range: 75,      // Portée des coups de poing
+                melee_angle: 120,      // Largeur de l'arc de frappe
+                damage: 10,           // Dégâts de base
+                fire_rate: 15,        // Vitesse d'attaque (délai entre les coups)
+                sprite: noone         // Pas de sprite d'arme spécifique affiché
+            };
+			
         case WeaponType.PISTOL:
             return {
                 name: "Pistol",
