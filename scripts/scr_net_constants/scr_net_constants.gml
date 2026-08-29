@@ -8,3 +8,4 @@
 #macro PKT_WEAPON_THROW 6
 #macro PKT_WEAPON_PICKUP 7
 #macro PKT_MELEE 8
+#macro PKT_DISARM 9

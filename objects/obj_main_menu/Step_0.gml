@@ -43,24 +43,15 @@ if (_select)
 {
     switch (menu_index)
     {
-        case 0: // Héberger une partie
-            global.is_host = true;
-            // Crée un lobby Steam (type: amis uniquement, 2 joueurs max)
-            if (variable_global_exists("steam_api_active") && global.steam_api_active)
-            {
-                steam_lobby_create(steam_lobby_type_friends_only, 2);
-            }
-            room_goto(rm_test_movement); // Remplace par le nom de ta salle de jeu
-            break;
+		 case 0: // Héberger une partie
+		    global.is_host = true;
+		    lobby_search_and_join(); // laisse le système de lobby gérer création + transition
+		    break;
 
-        case 1: // Rejoindre un ami
-            global.is_host = false;
-            // Ouvre l'overlay Steam sur la liste d'amis
-            if (variable_global_exists("steam_api_active") && global.steam_api_active)
-            {
-                steam_activate_overlay("Friends");
-            }
-            break;
+		case 1: // Rejoindre un ami
+		    global.is_host = false;
+		    steam_activate_overlay("Friends");
+		    break;
 
         case 2: // Entraînement / Solo
             global.is_host = true;

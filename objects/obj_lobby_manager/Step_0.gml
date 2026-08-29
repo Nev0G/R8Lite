@@ -14,9 +14,10 @@ while (steam_net_packet_receive())
         case PKT_STATE:
     var _px = buffer_read(_buf, buffer_f32);
     var _py = buffer_read(_buf, buffer_f32);
-    var _pvx = buffer_read(_buf, buffer_f32); // ajouté
-    var _pvy = buffer_read(_buf, buffer_f32); // ajouté
+    var _pvx = buffer_read(_buf, buffer_f32);
+    var _pvy = buffer_read(_buf, buffer_f32);
     var _aim = buffer_read(_buf, buffer_f32);
+    var _sliding = buffer_read(_buf, buffer_f32); // ← AJOUTÉ, manquait
     var _hp = buffer_read(_buf, buffer_s16);
     var _dead = buffer_read(_buf, buffer_u8);
     var _weapon = buffer_read(_buf, buffer_s8);
@@ -31,6 +32,7 @@ while (steam_net_packet_receive())
             net_vel_x = _pvx;
             net_vel_y = _pvy;
             aim_direction = _aim;
+            is_sliding = (_sliding > 0.5); // ← AJOUTÉ, pour l'affichage aplati côté adversaire
             hp_current = _hp;
             is_dead = _dead;
             current_weapon_type = _weapon;
@@ -116,8 +118,8 @@ while (steam_net_packet_receive())
             {
                 if (!is_local_player)
                 {
-                    x = _px;
-                    y = _py;
+                    net_pos_x = _px;
+                    net_pos_y = _py;
                     aim_direction = _aim;
                     
                     var _cfg = weapon_get_config(_weapon);
@@ -212,6 +214,40 @@ while (steam_net_packet_receive())
         }
     }
     break;
+	
+	case PKT_DISARM:
+    with (obj_player)
+    {
+        if (is_local_player && current_weapon_type != -1)
+        {
+            var _drop = instance_create_layer(x, y, "Instances", obj_weapon_pickup);
+            _drop.weapon_type = current_weapon_type;
+            _drop.ammo_current = ammo_current;
+            _drop.reserve_ammo_current = reserve_ammo_current;
+            _drop.pickup_locked_until = current_time + 800;
+
+            if (global.opponent_steam_id != -1)
+            {
+                var _buf = buffer_create(22, buffer_fixed, 1);
+                buffer_write(_buf, buffer_u8, PKT_WEAPON_THROW);
+                buffer_write(_buf, buffer_f32, x);
+                buffer_write(_buf, buffer_f32, y);
+                buffer_write(_buf, buffer_f32, 0);
+                buffer_write(_buf, buffer_f32, 0);
+                buffer_write(_buf, buffer_s8, current_weapon_type);
+                buffer_write(_buf, buffer_s16, ammo_current);
+                buffer_write(_buf, buffer_s16, reserve_ammo_current);
+                steam_net_packet_send(global.opponent_steam_id, _buf, -1);
+                buffer_delete(_buf);
+            }
+
+            current_weapon_type = -1;
+            current_weapon_config = undefined;
+            ammo_current = 0;
+            reserve_ammo_current = 0;
+        }
+    }
+    break;
     }
 	
 	
@@ -219,6 +255,8 @@ while (steam_net_packet_receive())
 
     buffer_delete(_buf);
 }
+
+
 
 
 

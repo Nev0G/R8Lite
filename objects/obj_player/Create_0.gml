@@ -69,8 +69,6 @@ ground_pound_speed = 15.0;
 // --- Arsenal & Combat ---
 current_weapon_type = -1;
 current_weapon_config = undefined;
-weapon_sprite_offset_x = 8;
-weapon_sprite_offset_y = -4;
 aim_direction = 0;
 aim_range_pickup = 24;
 fire_cooldown_current = 0;

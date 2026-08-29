@@ -330,18 +330,14 @@ if (is_local_player)
                     _hit_target.hp_current -= _cfg.damage;
                     network_send_hit(_cfg.damage);
 
-                    // Désarmement de la cible si elle tient une arme
-                    if (_hit_target.current_weapon_type != -1)
-                    {
-                        var _drop = instance_create_layer(_hit_target.x, _hit_target.y, "Instances", obj_weapon_pickup);
-                        _drop.weapon_type = _hit_target.current_weapon_type;
-                        _drop.ammo_current = _hit_target.ammo_current;
-                        _drop.reserve_ammo_current = _hit_target.reserve_ammo_current;
-                        _drop.pickup_locked_until = current_time + 800;
-
-                        _hit_target.current_weapon_type = -1;
-                        _hit_target.current_weapon_config = undefined;
-                    }
+                    // Désarmement de la cible : on notifie le vrai propriétaire au lieu de modifier localement
+					if (_hit_target.current_weapon_type != -1 && global.opponent_steam_id != -1)
+					{
+					    var _buf_disarm = buffer_create(1, buffer_fixed, 1);
+					    buffer_write(_buf_disarm, buffer_u8, PKT_DISARM);
+					    steam_net_packet_send(global.opponent_steam_id, _buf_disarm, -1);
+					    buffer_delete(_buf_disarm);
+					}
 
                     if (_hit_target.hp_current <= 0)
                     {
@@ -353,7 +349,7 @@ if (is_local_player)
                 }
 
                 // 2. Parade au couteau (Renvoi des balles et armes lancées)
-                with (obj_bullet_straight)
+                with (obj_bullet_parent)
                 {
                     if (owner != other.id)
                     {
