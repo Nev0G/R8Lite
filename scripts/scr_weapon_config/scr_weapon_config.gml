@@ -25,7 +25,7 @@ function weapon_get_config(_type)
                 mag_size: 12,
                 reload_time: 60,
                 reserve_ammo: 24,
-                barrel_length: 20,
+                barrel_length: 34,
                 throw_gravity: 0.45,
                 recoil_force: 2.0
             };

@@ -1,7 +1,5 @@
 /// @desc Initialisation complète du joueur
 
-weapon_sprite_offset_x = 4;   // Léger décalage horizontal vers l'avant
-weapon_sprite_offset_y = -34; // Remonte de 34 pixels depuis les pieds jusqu'au torse
 
 // --- Inputs ---
 key_left = false;
@@ -69,6 +67,8 @@ ground_pound_speed = 15.0;
 // --- Arsenal & Combat ---
 current_weapon_type = -1;
 current_weapon_config = undefined;
+weapon_sprite_offset_x = 4;
+weapon_sprite_offset_y = -34;
 aim_direction = 0;
 aim_range_pickup = 24;
 fire_cooldown_current = 0;

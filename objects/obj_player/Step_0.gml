@@ -297,144 +297,83 @@ if (is_local_player)
             }
         }
 
-        // --- 5b. Tir / Mêlée avec Parade & Recul ---
-        var _fire_pressed = mouse_check_button(mb_left);
+        // --- 5b. Logique de Tir / Mêlée ---
+var _fire_pressed = mouse_check_button(mb_left);
 
-        if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee || ammo_current > 0))
+if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee || ammo_current > 0))
+{
+    if (_is_melee)
+    {
+        var _hit_target = noone;
+        with (obj_player)
         {
-            if (_is_melee)
+            if (!is_local_player && !is_dead)
             {
-                var _hit_target = noone;
-                var _attacker_x = x;
-                var _attacker_y = y + weapon_sprite_offset_y;
-                var _attacker_aim = aim_direction;
-
-                // 1. Dégâts et désarmement au corps-à-corps
-                with (obj_player)
+                var _dist = point_distance(other.x, other.y, x, y);
+                var _ang_diff = abs(angle_difference(point_direction(other.x, other.y, x, y), other.aim_direction));
+                if (_dist <= _cfg.melee_range && _ang_diff <= _cfg.melee_angle * 0.5)
                 {
-                    if (!is_local_player && !is_dead)
-                    {
-                        var _target_center_y = y + other.weapon_sprite_offset_y;
-                        var _dist = point_distance(_attacker_x, _attacker_y, x, _target_center_y);
-                        var _ang_diff = abs(angle_difference(point_direction(_attacker_x, _attacker_y, x, _target_center_y), _attacker_aim));
-                        
-                        if (_dist <= _cfg.melee_range && _ang_diff <= _cfg.melee_angle * 0.5)
-                        {
-                            _hit_target = id;
-                        }
-                    }
-                }
-
-                if (_hit_target != noone)
-                {
-                    _hit_target.hp_current -= _cfg.damage;
-                    network_send_hit(_cfg.damage);
-
-                    // Désarmement de la cible : on notifie le vrai propriétaire au lieu de modifier localement
-					if (_hit_target.current_weapon_type != -1 && global.opponent_steam_id != -1)
-					{
-					    var _buf_disarm = buffer_create(1, buffer_fixed, 1);
-					    buffer_write(_buf_disarm, buffer_u8, PKT_DISARM);
-					    steam_net_packet_send(global.opponent_steam_id, _buf_disarm, -1);
-					    buffer_delete(_buf_disarm);
-					}
-
-                    if (_hit_target.hp_current <= 0)
-                    {
-                        _hit_target.hp_current = 0;
-                        _hit_target.is_dead = true;
-                        if (global.is_host) with (obj_round_manager) { player_died(_hit_target, other.id); }
-                        else network_send_player_died(global.opponent_steam_id);
-                    }
-                }
-
-                // 2. Parade au couteau (Renvoi des balles et armes lancées)
-                with (obj_bullet_parent)
-                {
-                    if (owner != other.id)
-                    {
-                        var _b_dist = point_distance(_attacker_x, _attacker_y, x, y);
-                        var _b_ang = abs(angle_difference(point_direction(_attacker_x, _attacker_y, x, y), _attacker_aim));
-                        if (_b_dist <= _cfg.melee_range + 16 && _b_ang <= _cfg.melee_angle * 0.5)
-                        {
-                            owner = other.id;
-                            direction_travel = _attacker_aim;
-                            damage *= 1.5;
-                        }
-                    }
-                }
-
-                with (obj_weapon_thrown)
-                {
-                    if (owner != other.id)
-                    {
-                        var _w_dist = point_distance(_attacker_x, _attacker_y, x, y);
-                        var _w_ang = abs(angle_difference(point_direction(_attacker_x, _attacker_y, x, y), _attacker_aim));
-                        if (_w_dist <= _cfg.melee_range + 16 && _w_ang <= _cfg.melee_angle * 0.5)
-                        {
-                            owner = other.id;
-                            hspeed_current = lengthdir_x(12, _attacker_aim);
-                            vspeed_current = lengthdir_y(12, _attacker_aim);
-                        }
-                    }
-                }
-
-                melee_swing_timer = melee_swing_duration;
-                fire_cooldown_current = _cfg.fire_rate;
-
-                if (global.opponent_steam_id != -1)
-                {
-                    var _buf_melee = buffer_create(13, buffer_fixed, 1);
-                    buffer_write(_buf_melee, buffer_u8, PKT_MELEE);
-                    buffer_write(_buf_melee, buffer_f32, x);
-                    buffer_write(_buf_melee, buffer_f32, y);
-                    buffer_write(_buf_melee, buffer_f32, aim_direction);
-                    steam_net_packet_send(global.opponent_steam_id, _buf_melee, -1);
-                    buffer_delete(_buf_melee);
+                    _hit_target = id;
                 }
             }
-            else
+        }
+
+        if (_hit_target != noone)
+        {
+            _hit_target.hp_current -= _cfg.damage;
+            network_send_hit(_cfg.damage);
+
+            if (_hit_target.hp_current <= 0)
+            {
+                _hit_target.hp_current = 0;
+                _hit_target.is_dead = true;
+                if (global.is_host) with (obj_round_manager) { player_died(_hit_target, id); }
+                else network_send_player_died(global.opponent_steam_id);
+            }
+        }
+
+        melee_swing_timer = melee_swing_duration;
+        fire_cooldown_current = _cfg.fire_rate;
+
+        if (global.opponent_steam_id != -1)
+        {
+            var _buf_melee = buffer_create(13, buffer_fixed, 1);
+            buffer_write(_buf_melee, buffer_u8, PKT_MELEE);
+            buffer_write(_buf_melee, buffer_f32, x);
+            buffer_write(_buf_melee, buffer_f32, y);
+            buffer_write(_buf_melee, buffer_f32, aim_direction);
+            steam_net_packet_send(global.opponent_steam_id, _buf_melee, -1);
+            buffer_delete(_buf_melee);
+        }
+    }
+    else
     {
         ammo_current--;
 
-        var _facing_right = (mouse_x >= x);
-        var _hand_x = x + (weapon_sprite_offset_x * (_facing_right ? 1 : -1));
-        var _hand_y = y + weapon_sprite_offset_y;
+        var _torse_offset_y = -50;
+        var _barrel_dist = _cfg.barrel_length;
 
-        // Longueur du canon configurée dans l'arme
-        var _barrel_dist = variable_struct_exists(_cfg, "barrel_length") ? _cfg.barrel_length : 24;
-        
-        // Calcul du bout du canon
-        var _spawn_x = _hand_x + lengthdir_x(_barrel_dist, aim_direction);
-        var _spawn_y = _hand_y + lengthdir_y(_barrel_dist, aim_direction);
-
-        // Recoil Jump
-        var _recoil = variable_struct_exists(_cfg, "recoil_force") ? _cfg.recoil_force : 0;
-        hspeed_current -= lengthdir_x(_recoil, aim_direction);
-        vspeed_current -= lengthdir_y(_recoil, aim_direction);
-
-        var _final_dmg = _cfg.damage * (active_reload_boost ? 1.25 : 1.0);
-        var _hs_mult = variable_struct_exists(_cfg, "headshot_mult") ? _cfg.headshot_mult : 2.0;
+        var _spawn_x = x + lengthdir_x(_barrel_dist, aim_direction);
+        var _spawn_y = (y + _torse_offset_y) + lengthdir_y(_barrel_dist, aim_direction);
 
         if (variable_struct_exists(_cfg, "pellet_count"))
         {
             var _spread = _cfg.spread_angle;
-            for (var i = 0; i < _cfg.pellet_count; i++)
+            var _count = _cfg.pellet_count;
+            for (var i = 0; i < _count; i++)
             {
-                var _ang = aim_direction + random_range(-_spread * 0.5, _spread * 0.5);
+                var _angle_offset = random_range(-_spread * 0.5, _spread * 0.5);
                 var _bullet = instance_create_layer(_spawn_x, _spawn_y, "Instances", _cfg.bullet_object);
-                _bullet.damage = _final_dmg;
-                _bullet.headshot_mult = _hs_mult;
+                _bullet.damage = _cfg.damage;
                 _bullet.move_speed = _cfg.bullet_speed;
-                _bullet.direction_travel = _ang;
+                _bullet.direction_travel = aim_direction + _angle_offset;
                 _bullet.owner = id;
             }
         }
         else
         {
             var _bullet = instance_create_layer(_spawn_x, _spawn_y, "Instances", _cfg.bullet_object);
-            _bullet.damage = _final_dmg;
-            _bullet.headshot_mult = _hs_mult;
+            _bullet.damage = _cfg.damage;
             _bullet.move_speed = _cfg.bullet_speed;
             _bullet.direction_travel = aim_direction;
             _bullet.owner = id;
@@ -442,7 +381,6 @@ if (is_local_player)
             if (variable_struct_exists(_cfg, "max_bounces")) _bullet.bounces_max = _cfg.max_bounces;
         }
 
-        active_reload_boost = false;
         fire_cooldown_current = _cfg.fire_rate;
 
         if (global.opponent_steam_id != -1)
@@ -457,7 +395,7 @@ if (is_local_player)
             buffer_delete(_buf_shoot);
         }
     }
-        }
+}
     }
 
     /// @desc Bloc 6 : Lancer d'arme chargé (style Worms)

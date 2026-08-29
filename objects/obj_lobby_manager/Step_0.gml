@@ -119,7 +119,7 @@ while (steam_net_packet_receive())
                 if (!is_local_player)
                 {
                     net_pos_x = _px;
-                    net_pos_y = _py;
+                    net_pos_x = _py;
                     aim_direction = _aim;
                     
                     var _cfg = weapon_get_config(_weapon);
@@ -252,11 +252,10 @@ while (steam_net_packet_receive())
 	
 	
 	
+	
 
     buffer_delete(_buf);
 }
-
-
 
 
 
