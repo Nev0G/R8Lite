@@ -350,11 +350,21 @@ if (_fire_pressed && fire_cooldown_current <= 0 && !is_reloading && (_is_melee |
     {
         ammo_current--;
 
-        var _torse_offset_y = -50;
+        // On utilise l'origine de l'arme (_hand_x et _hand_y) calculée dans le Bloc 3
+        // plutôt que de créer un nouveau décalage arbitraire (_torse_offset_y).
         var _barrel_dist = _cfg.barrel_length;
+        
+        // --- DÉCALAGE VERTICAL DE L'ARME ---
+        // Ajustez cette valeur en testant. 
+        // Positif = déplace le tir vers le bas du sprite. Négatif = vers le haut du sprite.
+        var _barrel_offset_y = -32; 
 
-        var _spawn_x = x + lengthdir_x(_barrel_dist, aim_direction);
-        var _spawn_y = (y + _torse_offset_y) + lengthdir_y(_barrel_dist, aim_direction);
+        // La magie de la trigonométrie : on demande le point à 90° de l'arme. 
+        // Si vous visez à droite (0°), ça pointe vers le bas (-90°).
+        // Si vous visez à gauche (180°), ça pointe vers le haut (90°).
+        // Ça suit donc parfaitement le retournement du sprite !
+        var _spawn_x = _hand_x + lengthdir_x(_barrel_dist, aim_direction) + lengthdir_x(_barrel_offset_y, aim_direction - 90);
+        var _spawn_y = _hand_y + lengthdir_y(_barrel_dist, aim_direction) + lengthdir_y(_barrel_offset_y, aim_direction - 90);
 
         if (variable_struct_exists(_cfg, "pellet_count"))
         {
